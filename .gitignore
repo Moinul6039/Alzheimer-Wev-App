@@ -1,0 +1,23 @@
+# Dataset (large — download/prepare locally; see README)
+dataset/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+.env
+.venv/
+venv/
+
+# Uploads & IDE
+backend/uploads/*
+!backend/uploads/.gitkeep
+.idea/
+.vscode/
+.cursor/
+
+# OS
+Thumbs.db
+Desktop.ini
+.DS_Store
