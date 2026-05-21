@@ -12,34 +12,51 @@ frontend_dir = os.path.normpath(os.path.join(base_dir, "..", "frontend"))
 app = Flask(__name__, static_folder=frontend_dir, static_url_path="/static")
 CORS(app)
 
-# Classes
 classes = [
     "Mild Demented",
     "Moderate Demented",
     "Non Demented",
-    "Very Mild Demented"
+    "Very Mild Demented",
 ]
 
-# Load Model
 model_path = os.path.normpath(os.path.join(base_dir, "..", "model", "alzheimer_model.pth"))
 
 if not os.path.isfile(model_path):
-    raise FileNotFoundError(f"Model weights not found: {model_path}")
+    raise FileNotFoundError(
+        f"Model weights not found: {model_path}. Run train.py first and wait until it saves the model."
+    )
 
-model = models.resnet18()
-model.fc = nn.Linear(model.fc.in_features, 4)
-model.load_state_dict(torch.load(model_path, map_location=torch.device("cpu")))
+def build_model(state_dict):
+    """Support both old (128) and new (256) saved checkpoints."""
+    hidden = state_dict["fc.0.weight"].shape[0]
+    dropout = 0.5 if hidden == 128 else 0.4
+    model = models.resnet18(weights=None)
+    model.fc = nn.Sequential(
+        nn.Linear(model.fc.in_features, hidden),
+        nn.ReLU(),
+        nn.Dropout(dropout),
+        nn.Linear(hidden, 4),
+    )
+    model.load_state_dict(state_dict)
+    return model
+
+
+state_dict = torch.load(model_path, map_location=torch.device("cpu"))
+model = build_model(state_dict)
 model.eval()
 
-# Transform
+# Must match train.py preprocessing (including ImageNet normalize)
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
-    transforms.ToTensor()
+    transforms.ToTensor(),
+    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
 ])
+
 
 @app.route("/")
 def home():
     return app.send_static_file("index.html")
+
 
 @app.route("/predict", methods=["POST"])
 def predict():
@@ -55,12 +72,11 @@ def predict():
         probabilities = torch.nn.functional.softmax(outputs[0], dim=0)
         confidence, predicted = torch.max(probabilities, 0)
 
-    result = {
+    return jsonify({
         "prediction": classes[predicted.item()],
-        "confidence": round(confidence.item() * 100, 2)
-    }
+        "confidence": round(confidence.item() * 100, 2),
+    })
 
-    return jsonify(result)
 
 if __name__ == "__main__":
     app.run(debug=True)

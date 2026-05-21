@@ -1,0 +1,10 @@
+# Render.com — connect GitHub repo and use this Blueprint, or create Web Service manually.
+services:
+  - type: web
+    name: alzheimer-web-app
+    runtime: docker
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: PORT
+        value: 8080
