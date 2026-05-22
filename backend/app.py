@@ -7,6 +7,8 @@ import torch
 import torch.nn as nn
 from torchvision import transforms, models
 
+from gradcam import GradCAM, overlay_heatmap
+
 base_dir = os.path.dirname(os.path.abspath(__file__))
 frontend_dir = os.path.normpath(os.path.join(base_dir, "..", "frontend"))
 app = Flask(__name__, static_folder=frontend_dir, static_url_path="/static")
@@ -45,6 +47,8 @@ state_dict = torch.load(model_path, map_location=torch.device("cpu"))
 model = build_model(state_dict)
 model.eval()
 
+grad_cam = GradCAM(model, model.layer4[-1].conv2)
+
 # Must match train.py preprocessing (including ImageNet normalize)
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
@@ -65,16 +69,32 @@ def predict():
         return jsonify({"error": "No file part named 'file' in request"}), 400
 
     image = Image.open(file).convert("RGB")
-    image = transform(image).unsqueeze(0)
+    image_tensor = transform(image).unsqueeze(0)
 
-    with torch.no_grad():
-        outputs = model(image)
+    heatmap_url = None
+    with torch.enable_grad():
+        outputs = model(image_tensor)
         probabilities = torch.nn.functional.softmax(outputs[0], dim=0)
         confidence, predicted = torch.max(probabilities, 0)
+        predicted_idx = predicted.item()
+
+        try:
+            cam = grad_cam.compute(image_tensor, predicted_idx)
+            heatmap_url = overlay_heatmap(image, cam)
+        except Exception:
+            heatmap_url = None
+
+    prob_list = [
+        {"class": classes[i], "probability": round(probabilities[i].item() * 100, 2)}
+        for i in range(len(classes))
+    ]
+    prob_list.sort(key=lambda item: item["probability"], reverse=True)
 
     return jsonify({
-        "prediction": classes[predicted.item()],
+        "prediction": classes[predicted_idx],
         "confidence": round(confidence.item() * 100, 2),
+        "probabilities": prob_list,
+        "heatmap": heatmap_url,
     })
 
 

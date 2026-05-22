@@ -17,6 +17,52 @@ function parseConfidence(value) {
     return Number.isFinite(parsed) ? Math.min(100, Math.max(0, parsed)) : 0;
 }
 
+function ProbabilityChart({ probabilities, highlightClass }) {
+    if (!probabilities || !probabilities.length) {
+        return null;
+    }
+
+    return (
+        <div className="space-y-3">
+            <p className="text-xs font-medium uppercase tracking-wider text-slate-500">
+                All class probabilities
+            </p>
+            {probabilities.map((item) => {
+                const isTop = item.class === highlightClass;
+                return (
+                    <div key={item.class}>
+                        <div className="mb-1 flex items-center justify-between gap-2 text-xs">
+                            <span
+                                className={`truncate ${isTop ? "font-semibold text-white" : "text-slate-400"}`}
+                            >
+                                {item.class}
+                            </span>
+                            <span className={`shrink-0 ${isTop ? "font-semibold text-sky-300" : "text-slate-500"}`}>
+                                {item.probability}%
+                            </span>
+                        </div>
+                        <div className="h-2.5 overflow-hidden rounded-full bg-slate-800">
+                            <div
+                                className={`h-full rounded-full transition-all duration-500 ${
+                                    isTop
+                                        ? "bg-gradient-to-r from-sky-400 to-cyan-400"
+                                        : "bg-slate-600"
+                                }`}
+                                style={{ width: `${Math.min(100, item.probability)}%` }}
+                                role="progressbar"
+                                aria-valuenow={item.probability}
+                                aria-valuemin="0"
+                                aria-valuemax="100"
+                                aria-label={`${item.class}: ${item.probability}%`}
+                            />
+                        </div>
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
+
 function Spinner() {
     return (
         <svg
@@ -44,6 +90,8 @@ function App() {
     const [statusType, setStatusType] = useState("info");
     const [prediction, setPrediction] = useState(null);
     const [confidence, setConfidence] = useState(null);
+    const [probabilities, setProbabilities] = useState([]);
+    const [heatmapSrc, setHeatmapSrc] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [history, setHistory] = useState([]);
     const [dragActive, setDragActive] = useState(false);
@@ -79,6 +127,8 @@ function App() {
         setPreviewText(file.name);
         setPrediction(null);
         setConfidence(null);
+        setProbabilities([]);
+        setHeatmapSrc("");
         setStatusMessage("");
         setStatusType("info");
 
@@ -109,6 +159,8 @@ function App() {
         setStatusType("info");
         setPrediction(null);
         setConfidence(null);
+        setProbabilities([]);
+        setHeatmapSrc("");
 
         const formData = new FormData();
         formData.append("file", selectedFile);
@@ -130,6 +182,8 @@ function App() {
 
             setPrediction(resultPrediction);
             setConfidence(resultConfidence);
+            setProbabilities(data.probabilities || []);
+            setHeatmapSrc(data.heatmap || "");
             setStatusMessage("Prediction complete.");
             setStatusType("success");
 
@@ -154,6 +208,8 @@ function App() {
         setPreviewText("No file selected.");
         setPrediction(null);
         setConfidence(null);
+        setProbabilities([]);
+        setHeatmapSrc("");
         setStatusMessage("");
         setStatusType("info");
     };
@@ -342,6 +398,25 @@ function App() {
                                             />
                                         </div>
                                     </div>
+                                    <ProbabilityChart
+                                        probabilities={probabilities}
+                                        highlightClass={prediction}
+                                    />
+                                    {heatmapSrc ? (
+                                        <div>
+                                            <p className="mb-2 text-xs font-medium uppercase tracking-wider text-slate-500">
+                                                Model attention (Grad-CAM)
+                                            </p>
+                                            <p className="mb-3 text-xs leading-relaxed text-slate-500">
+                                                Warmer colors show where the model focused for this prediction.
+                                            </p>
+                                            <img
+                                                src={heatmapSrc}
+                                                alt="Grad-CAM heatmap overlay on brain scan"
+                                                className="w-full rounded-xl border border-slate-800/80"
+                                            />
+                                        </div>
+                                    ) : null}
                                 </div>
                             ) : (
                                 <p className="mt-5 text-sm leading-relaxed text-slate-500">
